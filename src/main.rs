@@ -131,14 +131,14 @@ fn prepare_statement(input_buffer: String) -> Option<Statement> {
     }
 }
 
-fn execute_statement(statement: Statement, mut table: &mut Table) {
+fn execute_statement(statement: Statement, table: &mut Table) {
     match statement.statement_type {
         StatementType::Insert => {
             if table.num_rows > TABLE_MAX_ROWS {
                 println!("ERROR: Table full");
             } // TODO: Handle this
             let row_to_insert = statement.row.unwrap();
-            insert_row(row_to_insert, &mut table);
+            insert_row(row_to_insert, table);
             table.num_rows += 1;
 
         }
