@@ -188,7 +188,7 @@ fn parse_insert(statement: &str) -> Result<(u32, String, String), text_io::Error
 fn execute_statement(statement: Statement, table: &mut Table) -> Result<(), ExecuteError> {
     match statement.statement_type {
         StatementType::Insert => {
-            if table.num_rows > TABLE_MAX_ROWS {
+            if table.num_rows >= TABLE_MAX_ROWS {
                 return Err(ExecuteError::TableFull);
             }
             let row_to_insert = statement.row.unwrap();
