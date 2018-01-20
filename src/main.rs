@@ -17,11 +17,6 @@ const TABLE_MAX_PAGES: usize = 32;
 const ROWS_PER_PAGE: usize = PAGE_SIZE / ROW_SIZE;
 const TABLE_MAX_ROWS: usize = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
-enum MetaCommandResult {
-    Success,
-    UnrecognizedCommand,
-}
-
 enum StatementType {
     Insert,
     Select,
@@ -63,12 +58,14 @@ impl fmt::Display for PrepareError {
 #[derive(Debug)]
 enum ExecuteError {
     TableFull,
+    UnrecognizedMetaCommand
 }
 
 impl Error for ExecuteError {
     fn description(&self) -> &str {
         match *self {
             ExecuteError::TableFull => "Error: The table is full",
+            ExecuteError::UnrecognizedMetaCommand => "Error: Unrecognized meta command"
 
         }
     }
@@ -78,6 +75,7 @@ impl fmt::Display for ExecuteError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ExecuteError::TableFull => write!(f, "Error: The table is full"),
+            ExecuteError::UnrecognizedMetaCommand => write!(f, "Error: Unrecognized meta command")
         }
     }
 }
@@ -128,18 +126,17 @@ fn read_input() -> String {
     input_buffer
 }
 
-fn execute_meta_command(input_buffer: String) -> MetaCommandResult {
+fn execute_meta_command(input_buffer: String) -> Result<(), ExecuteError> {
     match input_buffer.trim().as_ref() {
         ".exit" => {
             std::process::exit(0);
         }
         ".help" => {
             println!("{}", HELP_TEXT);
-            MetaCommandResult::Success
+            Ok(())
         }
         _ => {
-            println!("Cannot execute this meta command");
-            MetaCommandResult::UnrecognizedCommand
+            Err(ExecuteError::UnrecognizedMetaCommand)
         }
     }
 }
@@ -254,8 +251,11 @@ fn main() {
 
         if input_buffer.chars().next() == Some('.') {
             match execute_meta_command(input_buffer) {
-                MetaCommandResult::Success => continue,
-                MetaCommandResult::UnrecognizedCommand => continue,
+                Ok(()) => continue,
+                Err(e) => {
+                    println!("{}.", e.description());
+                    continue;
+                }
             }
         }
 
