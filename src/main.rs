@@ -1,5 +1,7 @@
 #![feature(const_size_of)]
 
+use std::error::Error;
+use std::fmt;
 use std::io::{self, Write};
 use std::mem;
 
@@ -36,6 +38,32 @@ impl Default for StatementType {
 struct Statement {
     statement_type: StatementType,
     row: Option<Row>,
+}
+
+#[derive(Debug)]
+enum PrepareError {
+    Syntax,
+    UnrecognizedStatement,
+}
+
+impl Error for PrepareError {
+    fn description(&self) -> &str {
+        match *self {
+            PrepareError::Syntax => "Syntax error: Could not parse statement",
+            PrepareError::UnrecognizedStatement => "Unrecognized keyword at start of statement",
+        }
+    }
+}
+
+impl fmt::Display for PrepareError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PrepareError::Syntax => write!(f, "Syntax error: Could not parse statement"),
+            PrepareError::UnrecognizedStatement => {
+                write!(f, "Unrecognized keyword at start of statement")
+            }
+        }
+    }
 }
 
 static HELP_TEXT: &str = "
@@ -100,35 +128,48 @@ fn execute_meta_command(input_buffer: String) -> MetaCommandResult {
     }
 }
 
-fn prepare_statement(input_buffer: String) -> Option<Statement> {
-    let s: &str = input_buffer.trim().as_ref();
-    match s {
-        _ if s.starts_with("insert") => {
+fn prepare_statement(input_buffer: String) -> Result<Statement, PrepareError> {
+    let statement: &str = input_buffer.trim().as_ref();
+    match statement {
+        _ if statement.starts_with("insert") => {
             let mut id: u32;
             let mut username: String;
             let mut email: String;
-            // Why cloned() ?
-            scan!(s.as_bytes().iter().cloned() => "insert {} {} {}", id, username, email);
+            let scan_result = parse_insert(statement);
+            match scan_result {
+                Ok((_id, _username, _email)) => {
+                    id = _id;
+                    username = _username;
+                    email = _email;
+                }
+                Err(_err) => return Err(PrepareError::Syntax),
+            };
             let row: Row = Row {
                 id,
                 username: ArrayString::<[u8; 32]>::from(username.as_str()).unwrap(),
                 email: ArrayString::<[u8; 256]>::from(email.as_str()).unwrap(),
             };
-            println!("{:?}", row);
-            // TODO: Handle error when there is less than 3 args or if username/email is too big
-            Some(Statement {
-                     statement_type: StatementType::Insert,
-                     row: Some(row),
-                 })
+            Ok(Statement {
+                   statement_type: StatementType::Insert,
+                   row: Some(row),
+               })
         }
-        _ if s.starts_with("select") => {
-            Some(Statement {
-                     statement_type: StatementType::Select,
-                     ..Default::default()
-                 })
+        _ if statement.starts_with("select") => {
+            Ok(Statement {
+                   statement_type: StatementType::Select,
+                   ..Default::default()
+               })
         }
-        _ => None,
+        _ => Err(PrepareError::UnrecognizedStatement),
     }
+}
+
+fn parse_insert(statement: &str) -> Result<(u32, String, String), text_io::Error> {
+    let id: u32;
+    let username: String;
+    let email: String;
+    try_scan!(statement.bytes() => "insert {} {} {}", id, username, email);
+    Ok((id, username, email))
 }
 
 fn execute_statement(statement: Statement, table: &mut Table) {
@@ -140,10 +181,11 @@ fn execute_statement(statement: Statement, table: &mut Table) {
             let row_to_insert = statement.row.unwrap();
             insert_row(row_to_insert, table);
             table.num_rows += 1;
-
+            println!("Executed.");
         }
         StatementType::Select => {
             print_table(table);
+            println!("Executed.");
         }
         StatementType::None => println!("Cannot execute this statement - Not implemented"),
     }
@@ -172,7 +214,7 @@ fn print_table(table: &Table) {
                 for some_row in page.rows.iter() {
                     match some_row {
                         &Some(ref row) => {
-                            println!("{:?}", row);
+                            print_row(row);
                         }
                         &None => break,
                     }
@@ -181,6 +223,10 @@ fn print_table(table: &Table) {
             &None => break,
         }
     }
+}
+
+fn print_row(row: &Row) {
+    println!("({}, {}, {})", row.id, row.username, row.email);
 }
 
 fn main() {
@@ -201,8 +247,8 @@ fn main() {
         let statement = prepare_statement(input_buffer);
 
         match statement {
-            Some(statement) => execute_statement(statement, &mut table),
-            None => println!("Cannot execute this statement"),
+            Ok(statement) => execute_statement(statement, &mut table),
+            Err(e) => println!("{}.", e.description()),
         }
     }
 }
