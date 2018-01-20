@@ -29,6 +29,7 @@ struct Statement {
 
 #[derive(Debug)]
 enum PrepareError {
+    StringTooLong,
     Syntax,
     UnrecognizedStatement,
 }
@@ -36,6 +37,7 @@ enum PrepareError {
 impl Error for PrepareError {
     fn description(&self) -> &str {
         match *self {
+            PrepareError::StringTooLong => "Error: String is too long",
             PrepareError::Syntax => "Error: Could not parse statement",
             PrepareError::UnrecognizedStatement => {
                 return "Error: Unrecognized keyword at start of statement";
@@ -47,6 +49,7 @@ impl Error for PrepareError {
 impl fmt::Display for PrepareError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            PrepareError::StringTooLong => write!(f, "Error: String is too long"),
             PrepareError::Syntax => write!(f, "Error: Could not parse statement"),
             PrepareError::UnrecognizedStatement => {
                 write!(f, "Error: Unrecognized keyword at start of statement")
@@ -58,14 +61,14 @@ impl fmt::Display for PrepareError {
 #[derive(Debug)]
 enum ExecuteError {
     TableFull,
-    UnrecognizedMetaCommand
+    UnrecognizedMetaCommand,
 }
 
 impl Error for ExecuteError {
     fn description(&self) -> &str {
         match *self {
             ExecuteError::TableFull => "Error: The table is full",
-            ExecuteError::UnrecognizedMetaCommand => "Error: Unrecognized meta command"
+            ExecuteError::UnrecognizedMetaCommand => "Error: Unrecognized meta command",
 
         }
     }
@@ -75,7 +78,7 @@ impl fmt::Display for ExecuteError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ExecuteError::TableFull => write!(f, "Error: The table is full"),
-            ExecuteError::UnrecognizedMetaCommand => write!(f, "Error: Unrecognized meta command")
+            ExecuteError::UnrecognizedMetaCommand => write!(f, "Error: Unrecognized meta command"),
         }
     }
 }
@@ -135,9 +138,7 @@ fn execute_meta_command(input_buffer: String) -> Result<(), ExecuteError> {
             println!("{}", HELP_TEXT);
             Ok(())
         }
-        _ => {
-            Err(ExecuteError::UnrecognizedMetaCommand)
-        }
+        _ => Err(ExecuteError::UnrecognizedMetaCommand),
     }
 }
 
@@ -157,6 +158,11 @@ fn prepare_statement(input_buffer: String) -> Result<Statement, PrepareError> {
                 }
                 Err(_err) => return Err(PrepareError::Syntax),
             };
+
+            if username.len() > 32 || email.len() > 256 {
+                return Err(PrepareError::StringTooLong);
+            }
+
             let row: Row = Row {
                 id,
                 username: ArrayString::<[u8; 32]>::from(username.as_str()).unwrap(),
