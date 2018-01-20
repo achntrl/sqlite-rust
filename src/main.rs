@@ -25,16 +25,8 @@ enum MetaCommandResult {
 enum StatementType {
     Insert,
     Select,
-    None,
 }
 
-impl Default for StatementType {
-    fn default() -> StatementType {
-        StatementType::None
-    }
-}
-
-#[derive(Default)]
 struct Statement {
     statement_type: StatementType,
     row: Option<Row>,
@@ -49,8 +41,10 @@ enum PrepareError {
 impl Error for PrepareError {
     fn description(&self) -> &str {
         match *self {
-            PrepareError::Syntax => "Syntax error: Could not parse statement",
-            PrepareError::UnrecognizedStatement => "Unrecognized keyword at start of statement",
+            PrepareError::Syntax => "Error: Could not parse statement",
+            PrepareError::UnrecognizedStatement => {
+                return "Error: Unrecognized keyword at start of statement";
+            }
         }
     }
 }
@@ -58,10 +52,32 @@ impl Error for PrepareError {
 impl fmt::Display for PrepareError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            PrepareError::Syntax => write!(f, "Syntax error: Could not parse statement"),
+            PrepareError::Syntax => write!(f, "Error: Could not parse statement"),
             PrepareError::UnrecognizedStatement => {
-                write!(f, "Unrecognized keyword at start of statement")
+                write!(f, "Error: Unrecognized keyword at start of statement")
             }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ExecuteError {
+    TableFull,
+}
+
+impl Error for ExecuteError {
+    fn description(&self) -> &str {
+        match *self {
+            ExecuteError::TableFull => "Error: The table is full",
+
+        }
+    }
+}
+
+impl fmt::Display for ExecuteError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ExecuteError::TableFull => write!(f, "Error: The table is full"),
         }
     }
 }
@@ -157,7 +173,7 @@ fn prepare_statement(input_buffer: String) -> Result<Statement, PrepareError> {
         _ if statement.starts_with("select") => {
             Ok(Statement {
                    statement_type: StatementType::Select,
-                   ..Default::default()
+                   row: Default::default(),
                })
         }
         _ => Err(PrepareError::UnrecognizedStatement),
@@ -172,22 +188,21 @@ fn parse_insert(statement: &str) -> Result<(u32, String, String), text_io::Error
     Ok((id, username, email))
 }
 
-fn execute_statement(statement: Statement, table: &mut Table) {
+fn execute_statement(statement: Statement, table: &mut Table) -> Result<(), ExecuteError> {
     match statement.statement_type {
         StatementType::Insert => {
             if table.num_rows > TABLE_MAX_ROWS {
-                println!("ERROR: Table full");
-            } // TODO: Handle this
+                return Err(ExecuteError::TableFull);
+            }
             let row_to_insert = statement.row.unwrap();
             insert_row(row_to_insert, table);
             table.num_rows += 1;
-            println!("Executed.");
+            Ok(())
         }
         StatementType::Select => {
             print_table(table);
-            println!("Executed.");
+            Ok(())
         }
-        StatementType::None => println!("Cannot execute this statement - Not implemented"),
     }
 }
 
@@ -247,7 +262,12 @@ fn main() {
         let statement = prepare_statement(input_buffer);
 
         match statement {
-            Ok(statement) => execute_statement(statement, &mut table),
+            Ok(statement) => {
+                match execute_statement(statement, &mut table) {
+                    Ok(()) => println!("Executed."),
+                    Err(e) => println!("{}.", e.description()),
+                }
+            }
             Err(e) => println!("{}.", e.description()),
         }
     }
