@@ -2,8 +2,11 @@
 
 use std::error::Error;
 use std::fmt;
-use std::io::{self, Write};
+use std::io::prelude::*;
+use std::io::{self, SeekFrom, Write};
+use std::os::unix::prelude::FileExt;
 use std::mem;
+use std::fs::File;
 
 #[macro_use]
 extern crate text_io;
@@ -107,10 +110,73 @@ struct Page {
     rows: [Option<Row>; ROWS_PER_PAGE],
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
+struct Pager {
+    file_descriptor: File,
+    pages: [Option<Page>; TABLE_MAX_PAGES],
+    file_size: u64,
+}
+
+impl Pager {
+    fn open(filename: &str) -> Pager {
+        let file_descriptor = File::open(filename).expect("Error: File not found");
+
+        let file_size = file_descriptor.seek(SeekFrom::End(0)).unwrap();
+        let pages: [Option<Page>; TABLE_MAX_PAGES] = Default::default();
+
+        let pager = Pager { file_descriptor, pages, file_size };
+
+        pager
+    }
+}
+
+
+// #[derive(Default, Debug)]
 struct Table {
     pages: [Option<Page>; TABLE_MAX_PAGES],
+    pager: Pager,
     num_rows: usize,
+}
+
+impl Table {
+    fn new(filename: &str) -> Table {
+        let pager = Pager::open(filename);
+        let mut num_rows = 0;
+        let pages: [Option<Page>; TABLE_MAX_PAGES] = Default::default();
+        let table = Table {pager, pages, num_rows};
+
+        table
+        // Default::default()
+    }
+
+    fn get_page(self, page_num: usize) {
+        if page_num > TABLE_MAX_PAGES {
+            println!("Error: Tried to fetch page number out of bounds. {} > {}", page_num, TABLE_MAX_PAGES);
+            std::process::exit(-1);
+        }
+
+        match self.pager.pages[page_num] {
+            // Cache miss
+            None => {
+                self.pager.pages[page_num] = Default::default();
+                let num_pages = self.pager.file_size / (PAGE_SIZE as u64);
+                if (self.pager.file_size % (PAGE_SIZE as u64)) != 0 {
+                    num_pages += 1;
+                }
+
+                let offset = self
+                    .pager
+                    .file_descriptor
+                    .seek(SeekFrom::Start((page_num * PAGE_SIZE) as u64))
+                    .unwrap();
+
+                let mut buf = [0u8; PAGE_SIZE];
+
+                self.pager.file_descriptor.read_at(&mut buf, (page_num * PAGE_SIZE) as u64);
+            }
+            Some(page) => {}
+        }
+    }
 }
 
 
@@ -248,7 +314,7 @@ fn print_row(row: &Row) {
 }
 
 fn main() {
-    let mut table: Table = Default::default();
+    let mut table: Table = Table::new("db.db");
 
     loop {
         print_prompt();
@@ -278,3 +344,16 @@ fn main() {
         }
     }
 }
+
+// fn main() {
+//     let mut file_descriptor = File::open("toto.txt").expect("Error: File not found");
+
+//     let file_size = file_descriptor.seek(SeekFrom::Start(5)).unwrap();
+//     let mut buf = [0u8; 2];
+//     use std::os::unix::prelude::FileExt;
+//     use std::str;
+//     use std::fs::File;
+//     file_descriptor.read_at(&mut buf, file_size);
+//     println!("{}", file_size);
+//     println!("{}", str::from_utf8(&buf).unwrap());
+// }
