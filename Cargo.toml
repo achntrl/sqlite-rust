@@ -5,4 +5,4 @@ authors = ["Alexandre Chaintreuil <alexandre.chaintreuil@gmail.com>"]
 
 [dependencies]
 text_io = "0.1.7"
-arrayvec = "0.4.6"
+byteorder = "1.2.6"

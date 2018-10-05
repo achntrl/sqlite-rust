@@ -61,7 +61,7 @@ impl fmt::Display for PrepareError {
 }
 
 #[derive(Debug)]
-enum ExecuteError {
+pub enum ExecuteError {
     TableFull,
     UnrecognizedMetaCommand,
 }
@@ -71,7 +71,6 @@ impl Error for ExecuteError {
         match *self {
             ExecuteError::TableFull => "Error: The table is full",
             ExecuteError::UnrecognizedMetaCommand => "Error: Unrecognized meta command",
-
         }
     }
 }
@@ -104,7 +103,6 @@ fn read_input() -> String {
 fn execute_meta_command(input_buffer: String) -> Result<Option<i32>, ExecuteError> {
     match input_buffer.trim().as_ref() {
         ".exit" => {
-            // std::process::exit(0);
             Ok(Some(0))
         }
         ".help" => {
@@ -167,12 +165,11 @@ fn parse_insert(statement: &str) -> Result<(u32, String, String), text_io::Error
 fn execute_statement(statement: Statement, table: &mut Table) -> Result<(), ExecuteError> {
     match statement.statement_type {
         StatementType::Insert => {
-            if table.rows.len() >= TABLE_MAX_ROWS {
+            if table.num_row >= TABLE_MAX_ROWS {
                 return Err(ExecuteError::TableFull);
             }
             let row_to_insert = statement.row.unwrap();
             table.insert_row(row_to_insert);
-            // table.num_rows += 1;
             Ok(())
         }
         StatementType::Select => {

@@ -1,4 +1,7 @@
 describe 'database' do
+  before do
+    `rm -rf database.db`
+  end
   def run_script(commands)
     raw_output = nil
     IO.popen("target/debug/sqlite-rust", "r+") do |pipe|
@@ -39,7 +42,7 @@ describe 'database' do
 
   it 'allows inserting strings that are the maximum length' do
     long_username = "a"*32
-    long_email = "a"*255
+    long_email = "a"*256
     script = [
       "insert 1 #{long_username} #{long_email}",
       "select",
@@ -88,5 +91,26 @@ describe 'database' do
       "Executed.",
       "db > ",
     ])
+  end
+
+  it 'keeps all data after closing connection' do
+script = (1..1000).map do |i|
+  "insert #{i} user#{i} person#{i}@example.com"
+end
+    script << ".exit"
+    result1 = run_script(script)
+    expect(result1[-1]).to eq("db > ")
+
+    result2 = run_script([
+      "select",
+      ".exit",
+    ])
+    expected_result = ["db > (1, user1, person1@example.com)"]
+    (2..1000).map do |i|
+      expected_result << "(#{i}, user#{i}, person#{i}@example.com)"
+    end
+    expected_result << "Executed."
+    expected_result << "db > "
+    expect(result2).to match_array(expected_result)
   end
 end
